@@ -362,7 +362,7 @@ install_agent() {
         err "获取 Agent 版本号失败，请检查本机能否链接 https://api.github.com/repos/nezhahq/agent/releases/latest"
         return 1
     else
-        _version=v0.14.11
+        _version=v0.15.0
         echo "当前最新版本为： ${_version}"
     fi
 
