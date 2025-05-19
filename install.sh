@@ -23,7 +23,7 @@ TLS=${5:-""}
 
 if [ "$ACTION" = "install_agent" ]; then
     echo "开始安装哪吒探针..."
-    
+
     # 架构检测
     case $(uname -m) in
         x86_64|amd64) ARCH=amd ;;
@@ -64,6 +64,7 @@ EOF
         rc-update add nezha-agent default
         rc-service nezha-agent start
     fi
+
     echo "安装完成!"
 fi
 
