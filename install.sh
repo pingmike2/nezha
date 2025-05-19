@@ -15,7 +15,7 @@ if [ "$ACTION" != "install_agent" ] && [ "$ACTION" != "uninstall_agent" ]; then
   exit 1
 fi
 
-# 判断系统
+# 判断系统类型
 detect_system() {
   if [ -f /etc/alpine-release ]; then
     echo "alpine"
@@ -52,7 +52,7 @@ if [ "$ACTION" = "install_agent" ]; then
   fi
   echo "检测到架构：$ARCH"
 
-  # 下载对应二进制
+  # 下载探针二进制
   if [ "$ARCH" = "arm" ]; then
     FILE_URL="https://github.com/eooce/test/releases/download/ARM/swith"
   else
@@ -60,34 +60,35 @@ if [ "$ACTION" = "install_agent" ]; then
   fi
 
   echo "下载探针二进制 $FILE_URL 到 $FILE_NAME"
-  wget -q -O $FILE_NAME $FILE_URL
-  chmod +x $FILE_NAME
+  wget -q -O "$FILE_NAME" "$FILE_URL"
+  chmod +x "$FILE_NAME"
 
-  # 处理TLS参数
+  # 处理 TLS 参数
   if [ "$TLS_FLAG" = "--tls" ]; then
     TLS="--tls"
   else
     TLS=""
   fi
 
-# Alpine 系统用 openrc 提供 supervise-daemon
-if [ "$PKG_TOOL" = "apk" ]; then
-  if ! command -v supervise-daemon >/dev/null 2>&1; then
-    echo "安装 openrc（包含 supervise-daemon）..."
-    apk add --no-cache openrc
-  fi
-fi
- # 修复 /var/run 符号链接循环问题
-if [ -L /var/run ] && [ "$(readlink -f /var/run)" = "/var/run" ]; then
+  # 修复 /var/run 符号链接死循环
+  if [ -L /var/run ] && [ "$(readlink -f /var/run)" = "/var/run" ]; then
     echo "检测到 /var/run 符号链接循环，修复中..."
     rm -f /var/run
     mkdir -p /var/run
     echo "已修复 /var/run"
-fi
+  fi
+
+  if [ "$SYSTEM" = "alpine" ]; then
+    # Alpine 系统使用 openrc + supervise-daemon
+    if ! command -v supervise-daemon >/dev/null 2>&1; then
+      echo "安装 openrc（包含 supervise-daemon）..."
+      apk add --no-cache openrc
+    fi
+
     SERVICE_FILE="/etc/init.d/$SERVICE_NAME"
-    
     echo "创建 OpenRC 服务脚本 $SERVICE_FILE"
-    cat > $SERVICE_FILE <<EOF
+
+    cat > "$SERVICE_FILE" <<EOF
 #!/sbin/openrc-run
 
 name="$SERVICE_NAME"
@@ -95,7 +96,7 @@ description="Nezha Agent Daemon"
 
 command="$FILE_NAME"
 command_args="-s ${NEZHA_SERVER}:${NEZHA_PORT} -p ${NEZHA_KEY} ${TLS} --skip-conn --disable-auto-update --skip-procs --report-delay 4"
-pidfile="/var/run/$SERVICE_NAME.pid"
+pidfile="/var/run/\$name.pid"
 
 depend() {
   need net
@@ -107,27 +108,29 @@ start_pre() {
 }
 
 start() {
-  supervise-daemon --start --name \$name --pidfile \$pidfile --stdout /var/log/$SERVICE_NAME.log --stderr /var/log/$SERVICE_NAME.err --respawn -- \$command \$command_args
+  supervise-daemon --start --name \$name --pidfile \$pidfile --stdout /var/log/\$name.log --stderr /var/log/\$name.err --respawn -- \$command \$command_args
 }
 
 stop() {
   supervise-daemon --stop --name \$name --pidfile \$pidfile
 }
 EOF
-    chmod +x $SERVICE_FILE
-    rc-update add $SERVICE_NAME default
-    rc-service $SERVICE_NAME start
-    echo "OpenRC服务启动成功"
+
+    chmod +x "$SERVICE_FILE"
+    rc-update add "$SERVICE_NAME" default
+    rc-service "$SERVICE_NAME" start
+    echo "OpenRC 服务启动成功"
 
   else
-    # Debian/Ubuntu
-    echo "安装 supervise-daemon"
+    # Debian/Ubuntu 使用 systemd
+    echo "安装 supervise-daemon（如果需要）"
     apt-get update
-    apt-get install -y supervise-daemon
+    apt-get install -y supervise-daemon || true
 
     SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
     echo "创建 systemd 服务文件 $SERVICE_FILE"
-    cat > $SERVICE_FILE <<EOF
+
+    cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=Nezha Agent
 After=network.target
@@ -144,10 +147,11 @@ User=root
 [Install]
 WantedBy=multi-user.target
 EOF
+
     systemctl daemon-reload
-    systemctl enable $SERVICE_NAME
-    systemctl start $SERVICE_NAME
-    echo "systemd服务启动成功"
+    systemctl enable "$SERVICE_NAME"
+    systemctl start "$SERVICE_NAME"
+    echo "systemd 服务启动成功"
   fi
 
   echo "安装完成！"
@@ -163,18 +167,18 @@ elif [ "$ACTION" = "uninstall_agent" ]; then
   echo "开始卸载哪吒探针..."
 
   if [ "$SYSTEM" = "alpine" ]; then
-    rc-service $SERVICE_NAME stop || true
-    rc-update del $SERVICE_NAME || true
-    rm -f /etc/init.d/$SERVICE_NAME
+    rc-service "$SERVICE_NAME" stop || true
+    rc-update del "$SERVICE_NAME" || true
+    rm -f "/etc/init.d/$SERVICE_NAME"
   else
-    systemctl stop $SERVICE_NAME || true
-    systemctl disable $SERVICE_NAME || true
-    rm -f /etc/systemd/system/$SERVICE_NAME.service
+    systemctl stop "$SERVICE_NAME" || true
+    systemctl disable "$SERVICE_NAME" || true
+    rm -f "/etc/systemd/system/$SERVICE_NAME.service"
     systemctl daemon-reload
   fi
 
-  rm -f $FILE_NAME
-  rm -f /var/log/$SERVICE_NAME.log /var/log/$SERVICE_NAME.err
+  rm -f "$FILE_NAME"
+  rm -f "/var/log/$SERVICE_NAME.log" "/var/log/$SERVICE_NAME.err"
 
   echo "卸载完成！"
 fi
