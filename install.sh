@@ -72,7 +72,7 @@ if [ "$ACTION" = "install_agent" ]; then
 
   if [ "$SYSTEM" = "alpine" ]; then
     echo "安装 supervise-daemon"
-    apk add --no-cache supervise-daemon
+    apk add --no-cache openrc
 
     SERVICE_FILE="/etc/init.d/$SERVICE_NAME"
     echo "创建 OpenRC 服务脚本 $SERVICE_FILE"
