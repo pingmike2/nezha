@@ -17,6 +17,7 @@
 
 ```bash
 curl -L https:///install.sh -o nezha.sh && chmod +x nezha.sh && sudo ./nezha.sh install_agent <面板地址> <端口> <密钥> --tls
+```
 
 ### 2. 替换脚本地址为本项目地址：
 
@@ -24,27 +25,20 @@ curl -L https:///install.sh -o nezha.sh && chmod +x nezha.sh && sudo ./nezha.sh 
 
 ```bash
 https://raw.githubusercontent.com/pingmike2/nezha/main/install.sh
+```
 
 ### 3. 示例命令
 
 以下是完整的一键安装命令示例（请根据你的面板信息替换参数）：
 
 ```bash
-curl -L https://raw.githubusercontent.com/pingmike2/nezha/main/install.sh -o nezha.sh && chmod +x nezha.sh && sudo ./nezha.sh install_agent nezha.jaxmike.nyc.mn 443 hZzhvVnS4JuecsZTXn --tls
+curl -L https://raw.githubusercontent.com/pingmike2/nezha/main/install.sh -o nezha.sh && chmod +x nezha.sh && sudo ./nezha.sh install_agent nezha.xxxx.nyc.mn 443 hZzhvVnS4Juec --tls
 ```
+
 示例中使用了 TLS，若你的面板未配置 TLS，可去掉 --tls 参数.
 
 
-### 3. 示例命令
-
-以下是完整的一键安装命令示例（请根据你的面板信息替换参数）：
-
-```bash
-curl -L https://raw.githubusercontent.com/pingmike2/nezha/main/install.sh -o nezha.sh && chmod +x nezha.sh && sudo ./nezha.sh install_agent nezha.jaxmike.nyc.mn 443 hZzhvVnS4JuecsZTXn --tls
-```
-	示例中使用了 TLS，若你的面板未配置 TLS，可去掉 --tls 参数。
-
-###卸载方法
+### 卸载方法
 
 如需卸载 Agent，使用以下命令：
 
@@ -54,7 +48,7 @@ sudo ./nezha.sh uninstall_agent
 
 该命令将自动判断系统类型并清理对应的守护服务（systemd 或 OpenRC）、二进制文件及日志。
 
-###注意事项
+### 注意事项
 	•	哪吒监控 v1.x 已发布，面板默认安装的是 v0.20.5 的 Agent。
 	•	本脚本强制使用 固定版本 v0.14.11，不会自动升级，适用于旧版本面板或定制需求。
 	•	支持系统：
@@ -67,7 +61,7 @@ sudo ./nezha.sh uninstall_agent
 	•	Agent 安装后会以守护进程方式运行，支持开机自启和异常自动重启。
 
 
-###免责声明
+### 免责声明
 
 本项目为个人自用脚本，仅供技术测试和学习交流使用。
 	•	使用本脚本即表示你已知悉并接受所有风险。
