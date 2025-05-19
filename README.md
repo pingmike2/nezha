@@ -32,7 +32,7 @@ https://raw.githubusercontent.com/pingmike2/nezha/main/install.sh
 以下是完整的一键安装命令示例（请根据你的面板信息替换参数）：
 
 ```bash
-curl -L https://raw.githubusercontent.com/pingmike2/nezha/main/install.sh -o nezha.sh && chmod +x nezha.sh && sudo ./nezha.sh install_agent nezha.xxxx.nyc.mn 443 hZzhvVnS4Juec --tls
+curl -L https://raw.githubusercontent.com/pingmike2/nezha/main/install.sh -o install.sh && chmod +x install.sh && sudo ./install.sh install_agent nezha.xxxx.nyc.mn 443 hZzhvVnS4JuecsZ --tls
 ```
 
 示例中使用了 TLS，若你的面板未配置 TLS，可去掉 --tls 参数.
