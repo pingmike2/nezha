@@ -70,9 +70,13 @@ if [ "$ACTION" = "install_agent" ]; then
     TLS=""
   fi
 
-  if [ "$SYSTEM" = "alpine" ]; then
-    echo "安装 supervise-daemon"
+# Alpine 系统用 openrc 提供 supervise-daemon
+if [ "$PKG_TOOL" = "apk" ]; then
+  if ! command -v supervise-daemon >/dev/null 2>&1; then
+    echo "安装 openrc（包含 supervise-daemon）..."
     apk add --no-cache openrc
+  fi
+fi
 
     SERVICE_FILE="/etc/init.d/$SERVICE_NAME"
     echo "创建 OpenRC 服务脚本 $SERVICE_FILE"
