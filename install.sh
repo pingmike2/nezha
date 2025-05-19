@@ -1,4 +1,4 @@
-l#!/bin/sh
+#!/bin/sh
 set -e
 
 # 参数检查
