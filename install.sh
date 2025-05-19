@@ -77,8 +77,15 @@ if [ "$PKG_TOOL" = "apk" ]; then
     apk add --no-cache openrc
   fi
 fi
-
+ # 修复 /var/run 符号链接循环问题
+if [ -L /var/run ] && [ "$(readlink -f /var/run)" = "/var/run" ]; then
+    echo "检测到 /var/run 符号链接循环，修复中..."
+    rm -f /var/run
+    mkdir -p /var/run
+    echo "已修复 /var/run"
+fi
     SERVICE_FILE="/etc/init.d/$SERVICE_NAME"
+    
     echo "创建 OpenRC 服务脚本 $SERVICE_FILE"
     cat > $SERVICE_FILE <<EOF
 #!/sbin/openrc-run
