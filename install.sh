@@ -33,6 +33,13 @@ if [ "$SYSTEM" = "unsupported" ]; then
   echo "不支持的系统"
   exit 1
 fi
+# 提前修复 /var/run 循环问题
+if [ -L /var/run ] && [ "$(readlink -f /var/run)" = "/var/run" ]; then
+  echo "检测到 /var/run 符号链接循环，修复中..."
+  rm -f /var/run
+  mkdir -p /var/run
+  echo "已修复 /var/run"
+fi
 
 FILE_NAME="/usr/local/bin/nezha-agent"
 SERVICE_NAME="nezha-agent"
@@ -69,15 +76,7 @@ if [ "$ACTION" = "install_agent" ]; then
   else
     TLS=""
   fi
-
-  # 修复 /var/run 符号链接死循环
-  if [ -L /var/run ] && [ "$(readlink -f /var/run)" = "/var/run" ]; then
-    echo "检测到 /var/run 符号链接循环，修复中..."
-    rm -f /var/run
-    mkdir -p /var/run
-    echo "已修复 /var/run"
-  fi
-
+  
   if [ "$SYSTEM" = "alpine" ]; then
     # Alpine 系统使用 openrc + supervise-daemon
     if ! command -v supervise-daemon >/dev/null 2>&1; then
