@@ -114,11 +114,9 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/nezha-agent -s ${NEZHA_SERVER}:${NEZHA_PORT} -p ${NEZHA_KEY} ${TLS} --skip-conn --disable-auto-update --skip-procs --report-delay 4
+ExecStart=/bin/bash -c '/usr/local/bin/nezha-agent -s ${NEZHA_SERVER}:${NEZHA_PORT} -p ${NEZHA_KEY} ${TLS} --skip-conn --disable-auto-update --skip-procs --report-delay 4 >> /var/log/nezha-agent.log 2>&1'
 Restart=always
 User=root
-StandardOutput=file:/var/log/nezha-agent.log
-StandardError=file:/var/log/nezha-agent.err
 
 [Install]
 WantedBy=multi-user.target
