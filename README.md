@@ -37,7 +37,11 @@ curl -L https://raw.githubusercontent.com/pingmike2/nezha/main/nezha.sh -o nezha
 
 示例中使用了 TLS，若你的面板未配置 TLS，可去掉 --tls 参数.
 
+一键清理并重启
 systemctl stop nezha-agent 2>/dev/null || rc-service nezha-agent stop 2>/dev/null
+
+清理敏感命令历史
+history -d $(history 1)
 
 ### 卸载方法
 
@@ -61,6 +65,8 @@ sudo ./nezha.sh uninstall_agent
   - ARMv7 / ARM64
 - 不建议混合部署多个版本的探针，避免冲突或资源占用异常。
 - Agent 安装后会以守护进程方式运行，支持开机自启和异常自动重启。
+
+- 代码中使用了OTC大佬的反代服务，目前不清楚是不是公益服务，为了测试脚本临时使用，暂时先这样吧
 
 
 ### 免责声明
