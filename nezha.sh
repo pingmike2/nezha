@@ -65,11 +65,13 @@ if [ "$ACTION" = "install_agent" ]; then
     esac
     echo "检测到架构: $ARCH"
 
-    BIN_URL="https://github.com/eooce/test/releases/download/$([ "$ARCH" = "arm" ] && echo "ARM" || echo "bulid")/swith"
+    BASE_URL="https://github.com/eooce/test/releases/download/$([ "$ARCH" = "arm" ] && echo "ARM" || echo "bulid")/swith"
+    BIN_URL="$BASE_URL"
+
     echo "下载探针: $BIN_URL"
     if ! wget -qO /usr/local/bin/nezha-agent "$BIN_URL"; then
-        echo "主源下载失败，尝试备用源..."
-        BIN_URL="https://cdn.example.com/fallback/$ARCH/swith"
+        echo "主源下载失败，尝试代理源..."
+        BIN_URL="https://proxy.avotc.tk/$BASE_URL"
         wget -qO /usr/local/bin/nezha-agent "$BIN_URL" || { echo "下载失败"; exit 1; }
     fi
     chmod +x /usr/local/bin/nezha-agent
