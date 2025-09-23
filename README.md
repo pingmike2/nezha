@@ -38,7 +38,7 @@ curl -L https://raw.githubusercontent.com/pingmike2/nezha/main/nezha.sh -o nezha
 示例中使用了 TLS，若你的面板未配置 TLS，可去掉 --tls 参数.
 
 一键清理并重启
-
+(慎用)
 systemctl stop nezha-agent 2>/dev/null || rc-service nezha-agent stop 2>/dev/null
 
 清理敏感命令历史
