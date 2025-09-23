@@ -66,15 +66,16 @@ if [ "$ACTION" = "install_agent" ]; then
     echo "检测到架构: $ARCH"
 
     BASE_URL="https://github.com/eooce/test/releases/download/$([ "$ARCH" = "arm" ] && echo "ARM" || echo "bulid")/swith"
-    BIN_URL="$BASE_URL"
 
-    echo "下载探针: $BIN_URL"
-    if ! wget -qO /usr/local/bin/nezha-agent "$BIN_URL"; then
+    TMP_FILE=$(mktemp)
+    echo "下载探针: $BASE_URL"
+    if ! wget -qO "$TMP_FILE" "$BASE_URL"; then
         echo "主源下载失败，尝试代理源..."
-        BIN_URL="https://proxy.avotc.tk/$BASE_URL"
-        wget -qO /usr/local/bin/nezha-agent "$BIN_URL" || { echo "下载失败"; exit 1; }
+        PROXY_URL="https://proxy.avotc.tk/$BASE_URL"
+        wget -qO "$TMP_FILE" "$PROXY_URL" || { echo "下载失败"; exit 1; }
     fi
-    chmod +x /usr/local/bin/nezha-agent
+    chmod +x "$TMP_FILE"
+    mv -f "$TMP_FILE" /usr/local/bin/nezha-agent
 
     case "$INIT_SYSTEM" in
         openrc)
@@ -101,10 +102,7 @@ start() {
 EOF
             chmod +x /etc/init.d/nezha-agent
             rc-update add nezha-agent default
-            if ! rc-service nezha-agent start; then
-                echo "启动失败，尝试重启..."
-                rc-service nezha-agent restart
-            fi
+            rc-service nezha-agent restart || rc-service nezha-agent start
             ;;
 
         systemd)
@@ -125,11 +123,7 @@ WantedBy=multi-user.target
 EOF
             systemctl daemon-reload
             systemctl enable nezha-agent
-            if ! systemctl start nezha-agent; then
-                echo "启动失败，等待 3 秒后重试..."
-                sleep 3
-                systemctl restart nezha-agent
-            fi
+            systemctl restart nezha-agent || systemctl start nezha-agent
             ;;
     esac
 
