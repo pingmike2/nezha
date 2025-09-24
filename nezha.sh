@@ -10,9 +10,10 @@ TLS=${5:-""}
 CONFIG_DIR="/etc/nezha-agent"
 CONFIG_FILE="$CONFIG_DIR/nezha.conf"
 BIN_PATH="/usr/local/bin/nezha-agent"
+WRAPPER_PATH="/usr/local/bin/nezha-wrapper.sh"
 LOG_FILE="/var/log/nezha-agent.log"
 
-# ---------- 系统调优 ----------
+# ---------- 系统参数优化 ----------
 optimize_limits() {
     echo "调优系统参数 (nofile / inotify / file-max)..."
     ulimit -n 65535 || true
@@ -76,30 +77,40 @@ BIN_PATH=$BIN_PATH
 EOF
 }
 
+# ---------- 写 wrapper 脚本 ----------
+write_wrapper() {
+    cat > "$WRAPPER_PATH" <<'EOF'
+#!/bin/sh
+. /etc/nezha-agent/nezha.conf
+
+ARGS="-s ${SERVER}:${PORT} -p ${KEY} ${TLS} --skip-conn --disable-auto-update --skip-procs --report-delay 4"
+
+# 检测 --public-ip 支持
+if $BIN_PATH --help 2>&1 | grep -q -- "--public-ip"; then
+    ARGS="$ARGS --public-ip=${PUBLIC_IP}"
+fi
+
+exec $BIN_PATH $ARGS
+EOF
+    chmod +x "$WRAPPER_PATH"
+}
+
 # ---------- systemd ----------
 setup_systemd() {
     echo "配置 systemd 服务..."
-    cat > /etc/systemd/system/nezha-agent.service <<'EOF'
+    cat > /etc/systemd/system/nezha-agent.service <<EOF
 [Unit]
 Description=Nezha Agent
 After=network.target
 
 [Service]
 Type=simple
-EnvironmentFile=/etc/nezha-agent/nezha.conf
-ExecStart=/bin/bash -c '\
-if $BIN_PATH --help 2>&1 | grep -q -- "--public-ip"; then
-  exec $BIN_PATH -s ${SERVER}:${PORT} -p ${KEY} ${TLS} \
-    --skip-conn --disable-auto-update --skip-procs --report-delay 4 \
-    --public-ip=${PUBLIC_IP}
-else
-  exec $BIN_PATH -s ${SERVER}:${PORT} -p ${KEY} ${TLS} \
-    --skip-conn --disable-auto-update --skip-procs --report-delay 4
-fi'
+ExecStart=$WRAPPER_PATH
 Restart=always
 User=root
-StandardOutput=append:/var/log/nezha-agent.log
-StandardError=append:/var/log/nezha-agent.log
+LimitNOFILE=65535
+StandardOutput=append:$LOG_FILE
+StandardError=append:$LOG_FILE
 
 [Install]
 WantedBy=multi-user.target
@@ -113,16 +124,15 @@ EOF
 setup_openrc() {
     echo "配置 OpenRC 服务 (Alpine)..."
     mkdir -p /etc/init.d
-    cat > /etc/init.d/nezha-agent <<'EOF'
+    cat > /etc/init.d/nezha-agent <<EOF
 #!/sbin/openrc-run
 description="Nezha Agent"
 
-command="${BIN_PATH}"
-command_args="-s ${SERVER}:${PORT} -p ${KEY} ${TLS} --skip-conn --disable-auto-update --skip-procs --report-delay 4"
+command="$WRAPPER_PATH"
 pidfile="/run/nezha-agent.pid"
 command_background="yes"
-output_log="/var/log/nezha-agent.log"
-error_log="/var/log/nezha-agent.log"
+output_log="$LOG_FILE"
+error_log="$LOG_FILE"
 
 depend() {
     need net
@@ -138,6 +148,7 @@ if [ "$ACTION" = "install_agent" ]; then
     optimize_limits
     download_agent
     write_config
+    write_wrapper
 
     if command -v systemctl >/dev/null 2>&1; then
         setup_systemd
@@ -165,7 +176,7 @@ elif [ "$ACTION" = "uninstall_agent" ]; then
         rm -f /etc/init.d/nezha-agent
     fi
     rm -rf "$CONFIG_DIR"
-    rm -f "$BIN_PATH" "$LOG_FILE"
+    rm -f "$BIN_PATH" "$WRAPPER_PATH" "$LOG_FILE"
     echo "卸载完成!"
 
 else
