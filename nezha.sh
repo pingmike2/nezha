@@ -12,7 +12,7 @@ CONFIG_FILE="$CONFIG_DIR/nezha.conf"
 BIN_PATH="/usr/local/bin/nezha-agent"
 LOG_FILE="/var/log/nezha-agent.log"
 
-# ---------- 系统参数调优 ----------
+# ---------- 系统调优 ----------
 optimize_limits() {
     echo "调优系统参数 (nofile / inotify / file-max)..."
     ulimit -n 65535 || true
@@ -27,8 +27,11 @@ EOF
 get_public_ip() {
     LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
     if echo "$LOCAL_IP" | grep -qE '^10\.|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[01]\.|^192\.168\.'; then
-        echo "检测到本地地址为私网: $LOCAL_IP, 正在获取公网 IP..."
-        curl -s --max-time 5 ipv4.icanhazip.com || curl -s --max-time 5 ifconfig.me
+        echo "检测到内网地址: $LOCAL_IP, 尝试获取公网 IP..."
+        curl -s --max-time 5 ipv4.icanhazip.com || \
+        curl -s --max-time 5 ifconfig.me || \
+        curl -s --max-time 5 ip.sb || \
+        echo "$LOCAL_IP"
     else
         echo "$LOCAL_IP"
     fi
@@ -69,27 +72,34 @@ PORT=$NEZHA_PORT
 KEY=$NEZHA_KEY
 TLS=$TLS
 PUBLIC_IP=$PUBLIC_IP
+BIN_PATH=$BIN_PATH
 EOF
 }
 
-# ---------- 配置 systemd ----------
+# ---------- systemd ----------
 setup_systemd() {
     echo "配置 systemd 服务..."
-    cat > /etc/systemd/system/nezha-agent.service <<EOF
+    cat > /etc/systemd/system/nezha-agent.service <<'EOF'
 [Unit]
 Description=Nezha Agent
 After=network.target
 
 [Service]
 Type=simple
-EnvironmentFile=$CONFIG_FILE
-ExecStart=$BIN_PATH -s \${SERVER}:\${PORT} -p \${KEY} \${TLS} \\
-  --skip-conn --disable-auto-update --skip-procs --report-delay 4 \\
-  --public-ip=\${PUBLIC_IP}
+EnvironmentFile=/etc/nezha-agent/nezha.conf
+ExecStart=/bin/bash -c '\
+if $BIN_PATH --help 2>&1 | grep -q -- "--public-ip"; then
+  exec $BIN_PATH -s ${SERVER}:${PORT} -p ${KEY} ${TLS} \
+    --skip-conn --disable-auto-update --skip-procs --report-delay 4 \
+    --public-ip=${PUBLIC_IP}
+else
+  exec $BIN_PATH -s ${SERVER}:${PORT} -p ${KEY} ${TLS} \
+    --skip-conn --disable-auto-update --skip-procs --report-delay 4
+fi'
 Restart=always
 User=root
-StandardOutput=append:$LOG_FILE
-StandardError=append:$LOG_FILE
+StandardOutput=append:/var/log/nezha-agent.log
+StandardError=append:/var/log/nezha-agent.log
 
 [Install]
 WantedBy=multi-user.target
@@ -99,25 +109,65 @@ EOF
     systemctl enable --now nezha-agent
 }
 
+# ---------- openrc (alpine) ----------
+setup_openrc() {
+    echo "配置 OpenRC 服务 (Alpine)..."
+    mkdir -p /etc/init.d
+    cat > /etc/init.d/nezha-agent <<'EOF'
+#!/sbin/openrc-run
+description="Nezha Agent"
+
+command="${BIN_PATH}"
+command_args="-s ${SERVER}:${PORT} -p ${KEY} ${TLS} --skip-conn --disable-auto-update --skip-procs --report-delay 4"
+pidfile="/run/nezha-agent.pid"
+command_background="yes"
+output_log="/var/log/nezha-agent.log"
+error_log="/var/log/nezha-agent.log"
+
+depend() {
+    need net
+}
+EOF
+    chmod +x /etc/init.d/nezha-agent
+    rc-update add nezha-agent default
+    rc-service nezha-agent restart
+}
+
 # ---------- 主逻辑 ----------
 if [ "$ACTION" = "install_agent" ]; then
     optimize_limits
     download_agent
     write_config
-    setup_systemd
+
+    if command -v systemctl >/dev/null 2>&1; then
+        setup_systemd
+    elif command -v rc-update >/dev/null 2>&1; then
+        setup_openrc
+    else
+        echo "未检测到 systemd 或 openrc，需手动配置守护进程"
+        exit 1
+    fi
 
     echo "安装完成!"
-    echo "管理命令: systemctl [start|stop|status|restart] nezha-agent"
+    echo "管理命令: systemctl [start|stop|status|restart] nezha-agent (systemd)"
+    echo "        rc-service nezha-agent start|stop|status (openrc/alpine)"
     echo "配置文件: $CONFIG_FILE"
     echo "日志文件: $LOG_FILE"
+
 elif [ "$ACTION" = "uninstall_agent" ]; then
-    systemctl stop nezha-agent 2>/dev/null || true
-    systemctl disable nezha-agent 2>/dev/null || true
-    rm -f /etc/systemd/system/nezha-agent.service
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl stop nezha-agent 2>/dev/null || true
+        systemctl disable nezha-agent 2>/dev/null || true
+        rm -f /etc/systemd/system/nezha-agent.service
+    elif command -v rc-service >/dev/null 2>&1; then
+        rc-service nezha-agent stop 2>/dev/null || true
+        rc-update del nezha-agent 2>/dev/null || true
+        rm -f /etc/init.d/nezha-agent
+    fi
     rm -rf "$CONFIG_DIR"
     rm -f "$BIN_PATH" "$LOG_FILE"
-    systemctl daemon-reload
     echo "卸载完成!"
+
 else
     echo "用法:"
     echo "  $0 install_agent <server> <port> <key> [--tls]"
