@@ -9,7 +9,7 @@ if [ "$1" != "install_agent" ] && [ "$1" != "uninstall_agent" ]; then
     exit 1
 fi
 
-# 修复 /var/run 符号链接问题（解决 Alpine 软链循环）
+# 修复 /var/run 符号链接问题（Alpine 特有 bug）
 if [ -L /var/run ] && [ "$(readlink -f /var/run 2>/dev/null)" = "/var/run" ]; then
     rm -f /var/run
     mkdir -p /var/run
@@ -21,15 +21,15 @@ NEZHA_PORT=$3
 NEZHA_KEY=$4
 TLS=${5:-""}
 
-# 系统检测与依赖修复函数
+# 系统检测与依赖准备
 prepare_system() {
     if [ -f /etc/alpine-release ]; then
         INIT_SYSTEM="openrc"
-    elif command -v systemctl >/dev/null; then
+    elif command -v systemctl >/dev/null 2>&1; then
         INIT_SYSTEM="systemd"
     else
         if [ -f /etc/debian_version ] || [ -f /etc/lsb-release ]; then
-            echo "检测到 Debian/Ubuntu 但未安装 systemd，正在自动安装..."
+            echo "检测到 Debian/Ubuntu 但未安装 systemd，正在安装..."
             apt-get update && apt-get install -y systemd
             INIT_SYSTEM="systemd"
         else
@@ -38,17 +38,24 @@ prepare_system() {
         fi
     fi
 
-    if ! command -v start-stop-daemon >/dev/null && [ "$INIT_SYSTEM" = "openrc" ]; then
+    if ! command -v start-stop-daemon >/dev/null 2>&1 && [ "$INIT_SYSTEM" = "openrc" ]; then
         echo "正在安装 start-stop-daemon..."
         if [ -f /etc/alpine-release ]; then
             apk add --no-cache openrc
         else
             apt-get update && apt-get install -y start-stop-daemon || {
-                echo "无法安装 start-stop-daemon，尝试使用 systemd 替代"
+                echo "无法安装 start-stop-daemon，切换到 systemd"
                 INIT_SYSTEM="systemd"
             }
         fi
     fi
+
+    # 自动修复 inotify/file-max 限制
+    echo "调整系统资源限制..."
+    sysctl -w fs.inotify.max_user_instances=1024 >/dev/null 2>&1 || true
+    sysctl -w fs.inotify.max_user_watches=524288 >/dev/null 2>&1 || true
+    sysctl -w fs.file-max=2097152 >/dev/null 2>&1 || true
+    ulimit -n 1048576 || true
 
     export INIT_SYSTEM
 }
@@ -77,6 +84,8 @@ if [ "$ACTION" = "install_agent" ]; then
     chmod +x "$TMP_FILE"
     mv -f "$TMP_FILE" /usr/local/bin/nezha-agent
 
+    mkdir -p /var/log
+
     case "$INIT_SYSTEM" in
         openrc)
             echo "配置 OpenRC 服务"
@@ -86,19 +95,10 @@ name="nezha-agent"
 command="/usr/local/bin/nezha-agent"
 command_args="-s ${NEZHA_SERVER}:${NEZHA_PORT} -p ${NEZHA_KEY} ${TLS} --skip-conn --disable-auto-update --skip-procs --report-delay 4"
 pidfile="/var/run/\${RC_SVCNAME}.pid"
+output_log="/var/log/\$name.log"
+error_log="/var/log/\$name.err"
 
 depend() { need net; }
-
-start() {
-    start-stop-daemon --start \\
-        --exec \$command \\
-        --background \\
-        --make-pidfile \\
-        --pidfile \$pidfile \\
-        --stdout /var/log/\$name.log \\
-        --stderr /var/log/\$name.err \\
-        -- \$command_args
-}
 EOF
             chmod +x /etc/init.d/nezha-agent
             rc-update add nezha-agent default
@@ -114,9 +114,12 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/bin/bash -c '/usr/local/bin/nezha-agent -s ${NEZHA_SERVER}:${NEZHA_PORT} -p ${NEZHA_KEY} ${TLS} --skip-conn --disable-auto-update --skip-procs --report-delay 4 >> /var/log/nezha-agent.log 2>&1'
+ExecStart=/usr/local/bin/nezha-agent -s ${NEZHA_SERVER}:${NEZHA_PORT} -p ${NEZHA_KEY} ${TLS} --skip-conn --disable-auto-update --skip-procs --report-delay 4
 Restart=always
 User=root
+StandardOutput=append:/var/log/nezha-agent.log
+StandardError=append:/var/log/nezha-agent.err
+LimitNOFILE=1048576
 
 [Install]
 WantedBy=multi-user.target
@@ -137,6 +140,7 @@ EOF
 fi
 
 if [ "$ACTION" = "uninstall_agent" ]; then
+    echo "卸载哪吒探针..."
     case "$INIT_SYSTEM" in
         openrc)
             rc-service nezha-agent stop 2>/dev/null || true
